@@ -18,16 +18,43 @@ fn main() {
     let bounds = parse_pair::<usize>(&args[2], 'x').expect("error parsing image dimensions");
     let upper_left = parse_complex(&args[3]).expect("error parsing upper-left corner point");
     let lower_right = parse_complex(&args[4]).expect("error parsing lower-right corner point");
-
-    // let bounds:(usize, usize) = (1024, 768);
-    // let upper_left = Complex{re:-1.2, im:0.35};
-    // let lower_right = Complex{re:-1.0, im:0.2};
     
     let mut pixels = vec![0; bounds.0 * bounds.1];
 
-    render(&mut pixels, bounds, upper_left, lower_right);
+    //render(&mut pixels, bounds, upper_left, lower_right);
+    threaded_version(&mut pixels, bounds, upper_left, lower_right);
 
     write_image(&args[1], &pixels, bounds).expect("error writing PNG file");
+}
+
+fn threaded_version(pixels: &mut Vec<u8>, bounds : (usize, usize), upper_left: Complex<f64>, lower_right: Complex<f64>) {
+
+    let threads = 8;
+    let rows_per_band = bounds.1 / threads + 1;
+
+    {
+        let bands: Vec<&mut [u8]> = pixels.chunks_mut(rows_per_band * bounds.0).collect();
+
+        crossbeam::scope(|spawner| {
+
+            for (i, band) in bands.into_iter().enumerate() {
+
+                let top = rows_per_band * i;
+                let height:usize = band.len() / bounds.0;
+                let band_bounds = (bounds.0, height);
+
+                let band_upper_left = pixel_to_point(bounds, (0, top), upper_left, lower_right);
+
+                let band_lower_right = pixel_to_point(bounds, (bounds.0, top + height), upper_left, lower_right);
+
+                spawner.spawn(move |_| {
+                    render(band, band_bounds, band_upper_left, band_lower_right);
+                });
+
+            }
+
+        }).unwrap();
+    }
 }
 
 /// Parse the string `s` as a coordinate pair, like `"400x600"` or `"1.0,0.5"`.
