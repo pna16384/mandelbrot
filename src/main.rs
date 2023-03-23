@@ -1,9 +1,33 @@
+use image::png::PNGEncoder;
+use image::ColorType;
 use num::Complex;
 use std::str::FromStr;
+use std::fs::File;
+use std::env;
 
 fn main() {
+
+    let args : Vec<String> = env::args().collect();
+
+    if args.len() != 5 {
+        eprintln!("Usage: {} FILE PIXELS UPPERLEFT LOWERRIGHT", args[0]);
+        eprintln!("Example: {} mandelbrot.png 1024x768 -1.20,0.35 -1,0.2", args[0]);
+        std::process::exit(1);
+    }
+
+    let bounds = parse_pair::<usize>(&args[2], 'x').expect("error parsing image dimensions");
+    let upper_left = parse_complex(&args[3]).expect("error parsing upper-left corner point");
+    let lower_right = parse_complex(&args[4]).expect("error parsing lower-right corner point");
+
+    // let bounds:(usize, usize) = (1024, 768);
+    // let upper_left = Complex{re:-1.2, im:0.35};
+    // let lower_right = Complex{re:-1.0, im:0.2};
     
-    println!("Hello, world!");
+    let mut pixels = vec![0; bounds.0 * bounds.1];
+
+    render(&mut pixels, bounds, upper_left, lower_right);
+
+    write_image(&args[1], &pixels, bounds).expect("error writing PNG file");
 }
 
 /// Parse the string `s` as a coordinate pair, like `"400x600"` or `"1.0,0.5"`.
@@ -108,6 +132,17 @@ fn render(pixels : &mut [u8],
                 };
         }
     }
+}
+
+fn write_image(filename: &str, pixels: &[u8], bounds : (usize, usize)) -> Result<(), std::io::Error> {
+
+    let output = File::create(filename)?;
+
+    let encoder = PNGEncoder::new(output);
+
+    encoder.encode(pixels, bounds.0 as u32, bounds.1 as u32, ColorType::Gray(8))?;
+
+    Ok(())
 }
 
 
